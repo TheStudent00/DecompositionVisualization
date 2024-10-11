@@ -1,6 +1,6 @@
 # Decomposition Visualization
 
-## A little game to gain intuition behind EigenDecomp and SVD
+### A little game to gain intuition behind EigenDecomp and SVD
 
 Interactive exercise fully contained within single html files (using CDN and Javascript) that runs locally.
 
