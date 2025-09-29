@@ -62,16 +62,26 @@
       return [[1,0,0],[0,c,-s],[0,s,c]];
     }
 
-    // Full 3-DOF rotation via Z–X–Z Euler product (covers all of SO(3))
+    // Full 3-DOF rotation via Z–X–Z; optional random reflection for det = -1
     function generateRandomOrthogonal(){
+      // base rotation in SO(3)
       const theta = Math.random()*2*Math.PI;  // Z
       const phi   = Math.random()*2*Math.PI;  // X
       const gamma = Math.random()*2*Math.PI;  // Z
       const R = numeric.dot(numeric.dot(Rz(theta), Rx(phi)), Rz(gamma));
-      // If you also want det = -1 cases (full O(3)), uncomment one of the mirrors:
-      // const D = [[1,0,0],[0,1,0],[0,0,-1]];  // reflection in Z
-      // return numeric.dot(R, D);
-      return R;
+    
+      // with 50% probability, flip handedness using a single-axis reflection
+      if (Math.random() < 0.5) {
+        // pick one axis uniformly to reflect
+        const pick = Math.floor(Math.random()*3); // 0=x,1=y,2=z
+        const D = [
+          [pick===0 ? -1 : 1, 0, 0],
+          [0, pick===1 ? -1 : 1, 0],
+          [0, 0, pick===2 ? -1 : 1]
+        ];
+        return numeric.dot(R, D); // now in O(3) with det = -1
+      }
+      return R; // det = +1
     }
 
     function generateNormal(mean=0.0, std=1.0){
@@ -178,4 +188,82 @@
 
     function handleFirstSingularGuessSubmission(){
       if(!generatedMatrix) return;
-      const guess =
+      const guess = normalizeVector(getCameraPosition());
+      const truth = firstSingularVector; // u1
+      const acc = Math.abs(calculateCosineSimilarity(truth, guess))*100;
+      const div = document.getElementById('selection-accuracy');
+      div.innerHTML = `<p>${acc.toFixed(2)}%</p>`;
+      plotSingularVectorComparison(guess);
+    }
+
+    function getComputedSingularVector(A){
+      const svd = numeric.svd(A);
+      // numeric.svd returns U with columns = left singular vectors
+      const U = svd.U;
+      const U_t = transpose(U);
+      return normalizeVector(U_t[0]);
+    }
+
+    function plotSingularVectorComparison(guess){
+      const u_true = firstSingularVector;
+      const u_comp = getComputedSingularVector(generatedMatrix);
+      const u_guess = normalizeVector(guess);
+
+      const vTrue = {type:'scatter3d', mode:'lines+markers',
+        x:[-u_true[0], u_true[0]], y:[-u_true[1], u_true[1]], z:[-u_true[2], u_true[2]],
+        line:{width:6, dash:'dash', color:'green', opacity:.9},
+        marker:{size:1, color:'green', opacity:.9},
+        name:'True u₁'
+      };
+      const vComp = {type:'scatter3d', mode:'lines+markers',
+        x:[-u_comp[0], u_comp[0]], y:[-u_comp[1], u_comp[1]], z:[-u_comp[2], u_comp[2]],
+        line:{width:6, dash:'dot', color:'blue', opacity:.9},
+        marker:{size:1, color:'blue', opacity:.9},
+        name:'Computed u₁ (svd)'
+      };
+      const vGuess = {type:'scatter3d', mode:'lines+markers',
+        x:[0, u_guess[0]], y:[0, u_guess[1]], z:[0, u_guess[2]],
+        line:{width:6, dash:'dash', color:'magenta', opacity:.9},
+        marker:{size:1, color:'magenta', opacity:.9},
+        name:'Your guess'
+      };
+
+      const Mt = generatedMatrix_t.map(col=>col.slice()); // copy
+      const Acols = Mt.map((col,idx)=>({
+        type:'scatter3d', mode:'lines+markers',
+        x:[0,col[0]], y:[0,col[1]], z:[0,col[2]],
+        line:{width:6, color:['#00FFFF','#00CED1','#40E0D0'][idx%3], opacity:.85},
+        marker:{size:4, color:['#00FFFF','#00CED1','#40E0D0'][idx%3], opacity:.85},
+        name:`A column ${idx+1}`
+      }));
+
+      const layout = {
+        scene:{
+          xaxis:{range:[-buffer,buffer], title:'X'},
+          yaxis:{range:[-buffer,buffer], title:'Y'},
+          zaxis:{range:[-buffer,buffer], title:'Z'},
+          aspectmode:'cube'
+        },
+        paper_bgcolor:'black', plot_bgcolor:'black',
+        title:"Singular Vector (PCA) View",
+        font:{color:'white'}
+      };
+
+      Plotly.newPlot('plotly-div', [vComp, vTrue, ...Acols, vGuess], layout);
+    }
+
+    // UI wiring
+    document.getElementById('close-tutorial').addEventListener('click', ()=> {
+      document.getElementById('tutorial-video').style.display='none';
+    });
+    document.addEventListener('DOMContentLoaded', ()=>{
+      document.getElementById('generate-matrix').addEventListener('click', generateRandomMatrix);
+      document.getElementById('submit-guess').addEventListener('click', handleFirstSingularGuessSubmission);
+      document.getElementById('tutorial-button').addEventListener('click', ()=>{
+        const t = document.getElementById('tutorial-video');
+        t.style.display = (t.style.display==='none') ? 'block' : 'none';
+      });
+    });
+  </script>
+</body>
+</html>
